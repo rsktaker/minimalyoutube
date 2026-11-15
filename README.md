@@ -1,15 +1,15 @@
-# minitube
+# minimalyoutube
 
 A YouTube player that shows the video and nothing else. No feed, no search, no recommendations, no comments.
 
-**Live:** https://minitube-ivory.vercel.app
+**Live:** https://minimalyoutube.vercel.app
 
 Paste a YouTube link and it plays. When the video ends, you are back at the empty page.
 
 ## Use
 
 - Paste a link into the page, or paste over a playing video to switch.
-- Put a link after the address: `minitube-ivory.vercel.app/https://youtu.be/VIDEO_ID`
+- Put a link after the address: `minimalyoutube.vercel.app/https://youtu.be/VIDEO_ID`
 - Or use `?v=VIDEO_ID&t=90` to start at 90 seconds.
 
 Watch, `youtu.be`, shorts, embed and live links all work. It remembers where you stopped in each video.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>minitube</title>
+<title>minimalyoutube</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -287,7 +287,7 @@ function parseLink(text) {
 }
 
 // The page address can carry the video: /?v=ID&t=90, or a whole YouTube link
-// after the slash (minitube.example/https://youtu.be/ID).
+// after the slash (minimalyoutube.vercel.app/https://youtu.be/ID).
 function linkFromAddress() {
   const params = new URLSearchParams(location.search);
   if (location.pathname === "/" || location.pathname === "/index.html") {
@@ -383,7 +383,7 @@ function showAsk(text) {
   message.textContent = text || "";
   link.value = "";
   link.focus();
-  document.title = "minitube";
+  document.title = "minimalyoutube";
   document.body.classList.remove("idle");
   if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
 }
@@ -438,7 +438,7 @@ async function play(target) {
       onReady: () => {
         if (current !== target) return;
         ready = true;
-        document.title = player.getVideoData().title || "minitube";
+        document.title = player.getVideoData().title || "minimalyoutube";
         player.playVideo();
         ticker = setInterval(tick, 250);
         wake();
@@ -453,7 +453,7 @@ async function play(target) {
           rememberPosition();
           wake();
         } else if (e.data === YT.PlayerState.PLAYING) {
-          document.title = player.getVideoData().title || "minitube";
+          document.title = player.getVideoData().title || "minimalyoutube";
           wake();
         }
       },
