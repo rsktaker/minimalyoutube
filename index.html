@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>minitube</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --text: #9a9a9a;
+    --near: #5f5f5f;
+    --field: #f2f2f2;
+    --ar: 1.7778;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #3c3c3c;
+      --text: #8a8a8a;
+      --near: #c4c4c4;
+      --field: #464646;
+      color-scheme: dark;
+    }
+  }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font: 13px/1.7 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    color: var(--text);
+    overflow: hidden;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  /* Empty state: one line to paste into. */
+
+  #ask {
+    text-align: center;
+  }
+
+  #link {
+    font: inherit;
+    font-size: 22px;
+    width: min(26em, 90vw);
+    text-align: center;
+    color: var(--near);
+    background: none;
+    border: none;
+    outline: none;
+    padding: 0;
+  }
+
+  #link::placeholder {
+    color: var(--text);
+    opacity: 1;
+  }
+
+  #message {
+    min-height: 1.7em;
+  }
+
+  /* Player. */
+
+  #stage {
+    position: relative;
+    width: min(92vw, calc((100vh - 110px) * var(--ar)));
+  }
+
+  #frame {
+    position: relative;
+    aspect-ratio: var(--ar);
+    overflow: hidden;
+    background: #000;
+    border-radius: 4px;
+  }
+
+  /* The player is three times the height of its window, so YouTube's title
+     bar (top) and "more videos" shelf (bottom) sit outside what is shown. The
+     video itself is letterboxed into the middle third, which is the window. */
+  #frame iframe {
+    position: absolute;
+    left: 0;
+    top: -100%;
+    width: 100%;
+    height: 300%;
+    border: 0;
+  }
+
+  /* Takes every click and hover, so YouTube's own buttons never wake up. */
+  #cover {
+    position: absolute;
+    inset: 0;
+  }
+
+  #controls {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    padding-top: 4px;
+    transition: opacity 0.2s;
+  }
+
+  #seek {
+    padding: 8px 0;
+    cursor: pointer;
+  }
+
+  #track {
+    height: 2px;
+    border-radius: 1px;
+    background: var(--field);
+  }
+
+  #fill {
+    height: 100%;
+    width: 0;
+    border-radius: 1px;
+    background: var(--near);
+  }
+
+  #readout {
+    display: flex;
+    justify-content: space-between;
+    font-variant-numeric: tabular-nums;
+  }
+
+  button {
+    font: inherit;
+    color: var(--text);
+    background: none;
+    border: none;
+    padding: 2px 6px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    color: var(--near);
+  }
+
+  #new {
+    position: fixed;
+    right: 16px;
+    bottom: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  #new:hover {
+    opacity: 1;
+  }
+
+  body.idle #controls {
+    opacity: 0;
+  }
+
+  body.idle #cover {
+    cursor: none;
+  }
+
+  html:fullscreen body {
+    background: #000;
+  }
+
+  html:fullscreen #stage {
+    width: min(100vw, calc(100vh * var(--ar)));
+  }
+
+  html:fullscreen #frame {
+    border-radius: 0;
+  }
+
+  html:fullscreen #controls {
+    top: auto;
+    bottom: 0;
+    padding: 24px 16px 8px;
+    color: #c4c4c4;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  }
+
+  html:fullscreen #track {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  html:fullscreen #fill {
+    background: #e0e0e0;
+  }
+
+  html:fullscreen #new {
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div id="ask">
+    <input id="link" type="text" placeholder="Paste a youtube link" autocomplete="off" spellcheck="false" autofocus>
+    <div id="message"></div>
+  </div>
+
+  <div id="stage" hidden>
+    <div id="frame">
+      <div id="slot"></div>
+      <div id="cover"></div>
+    </div>
+    <div id="controls">
+      <div id="seek"><div id="track"><div id="fill"></div></div></div>
+      <div id="readout"><span id="time"></span><span id="note"></span></div>
+    </div>
+  </div>
+
+  <button id="new" hidden>new</button>
+
+<script>
+const EMBED_HOST = "https://www.youtube-nocookie.com";
+const IDLE_MS = 2200;
+const RESUME_KEY = "positions";
+const RESUME_MAX = 200;
+const ERRORS = {
+  2: "that link has a bad video id",
+  5: "the player could not play this video",
+  100: "video not found, or it is private",
+  101: "this one only plays on youtube itself, or does not exist",
+  150: "this one only plays on youtube itself, or does not exist",
+  153: "youtube refused the player (missing referrer)",
+};
+
+const $ = (id) => document.getElementById(id);
+const ask = $("ask"), link = $("link"), message = $("message");
+const stage = $("stage"), frame = $("frame"), cover = $("cover");
+const fill = $("fill"), seek = $("seek"), timeEl = $("time"), noteEl = $("note");
+const newButton = $("new");
+
+let player = null;      // YT.Player for the current video
+let current = null;     // { id, start }
+let ready = false;
+let ticker = null;
+let idleTimer = null;
+let noteTimer = null;
+let apiPromise = null;
+
+// ---------- links ----------
+
+function parseTime(t) {
+  if (!t) return 0;
+  if (/^\d+$/.test(t)) return Number(t);
+  const m = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+  return m ? (Number(m[1]) || 0) * 3600 + (Number(m[2]) || 0) * 60 + (Number(m[3]) || 0) : 0;
+}
+
+// Accepts watch, youtu.be, shorts, embed and live links, or a bare video id.
+function parseLink(text) {
+  text = (text || "").trim();
+  if (/^[\w-]{11}$/.test(text)) return { id: text, start: 0 };
+
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : "https://" + text);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.toLowerCase().replace(/^(www|m|music)\./, "");
+  let id = null;
+  if (host === "youtu.be") {
+    id = url.pathname.split("/")[1];
+  } else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    if (url.pathname === "/watch") {
+      id = url.searchParams.get("v");
+    } else {
+      const m = url.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/);
+      if (m) id = m[1];
+    }
+  }
+  if (!id || !/^[\w-]{11}$/.test(id)) return null;
+  return { id, start: parseTime(url.searchParams.get("t") || url.searchParams.get("start")) };
+}
+
+// The page address can carry the video: /?v=ID&t=90, or a whole YouTube link
+// after the slash (minitube.example/https://youtu.be/ID).
+function linkFromAddress() {
+  const params = new URLSearchParams(location.search);
+  if (location.pathname === "/" || location.pathname === "/index.html") {
+    const id = params.get("v");
+    return id ? parseLink(id) && { id, start: parseTime(params.get("t")) } : null;
+  }
+  // Some hosts collapse the double slash in the path (https:/youtu.be/ID).
+  const path = decodeURIComponent(location.pathname.slice(1)).replace(/^(https?:)\/+/i, "$1//");
+  return parseLink(path + location.search);
+}
+
+// ---------- resume positions ----------
+
+function readPositions() {
+  try {
+    return JSON.parse(localStorage.getItem(RESUME_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function savePosition(id, seconds) {
+  try {
+    const all = readPositions();
+    delete all[id];
+    if (seconds !== null) all[id] = Math.floor(seconds);
+    const ids = Object.keys(all);
+    ids.slice(0, Math.max(0, ids.length - RESUME_MAX)).forEach((old) => delete all[old]);
+    localStorage.setItem(RESUME_KEY, JSON.stringify(all));
+  } catch {
+    // Storage can be unavailable; resume is only a convenience.
+  }
+}
+
+function rememberPosition() {
+  if (!ready || !current) return;
+  const t = player.getCurrentTime(), d = player.getDuration();
+  if (!d) return;
+  savePosition(current.id, t > 10 && t < d - 15 ? t : null);
+}
+
+// ---------- player ----------
+
+function loadApi() {
+  apiPromise ||= new Promise((resolve, reject) => {
+    window.onYouTubeIframeAPIReady = resolve;
+    const s = document.createElement("script");
+    s.src = "https://www.youtube.com/iframe_api";
+    s.onerror = reject;
+    document.head.append(s);
+  });
+  return apiPromise;
+}
+
+// oEmbed gives the real shape (4:3, vertical shorts...). Without it the window
+// stays 16:9, which would crop a vertical video.
+async function aspectRatio(id) {
+  try {
+    // Asked through the /shorts/ form: only that one reports vertical videos
+    // as vertical, and it still answers correctly for ordinary ones.
+    const page = encodeURIComponent("https://www.youtube.com/shorts/" + id);
+    const res = await fetch("https://www.youtube.com/oembed?format=json&url=" + page);
+    const info = await res.json();
+    if (info.width > 0 && info.height > 0) {
+      // oEmbed rounds to small sizes (200x113), so snap to the common shapes.
+      const ratio = info.width / info.height;
+      return [16 / 9, 9 / 16, 4 / 3, 1].find((r) => Math.abs(r - ratio) / r < 0.02) || ratio;
+    }
+  } catch {
+    // Fall through to the default.
+  }
+  return 16 / 9;
+}
+
+function closePlayer() {
+  clearInterval(ticker);
+  ticker = null;
+  if (player) {
+    rememberPosition();
+    try { player.destroy(); } catch {}
+  }
+  player = null;
+  ready = false;
+  current = null;
+}
+
+function showAsk(text) {
+  closePlayer();
+  if (document.fullscreenElement) document.exitFullscreen();
+  stage.hidden = true;
+  newButton.hidden = true;
+  ask.hidden = false;
+  message.textContent = text || "";
+  link.value = "";
+  link.focus();
+  document.title = "minitube";
+  document.body.classList.remove("idle");
+  if (location.pathname !== "/" || location.search) history.replaceState(null, "", "/");
+}
+
+async function play(target) {
+  closePlayer();
+  current = target;
+  message.textContent = "";
+  history.replaceState(null, "", "/?v=" + target.id);
+
+  let ratio;
+  try {
+    [ratio] = await Promise.all([aspectRatio(target.id), loadApi()]);
+  } catch {
+    if (current === target) showAsk("could not reach youtube");
+    return;
+  }
+  if (current !== target) return; // another link was pasted meanwhile
+
+  document.documentElement.style.setProperty("--ar", ratio.toFixed(4));
+  ask.hidden = true;
+  stage.hidden = false;
+  newButton.hidden = false;
+  fill.style.width = "0";
+  timeEl.textContent = "";
+
+  const slot = document.createElement("div");
+  frame.querySelector("iframe, #slot")?.remove();
+  slot.id = "slot";
+  frame.prepend(slot);
+
+  const saved = readPositions()[target.id];
+  const start = target.start || saved || 0;
+
+  player = new YT.Player(slot, {
+    host: EMBED_HOST,
+    videoId: target.id,
+    width: "100%",
+    height: "100%",
+    playerVars: {
+      autoplay: 1,
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      iv_load_policy: 3,
+      rel: 0,
+      playsinline: 1,
+      start: Math.floor(start),
+      origin: location.origin,
+    },
+    events: {
+      onReady: () => {
+        if (current !== target) return;
+        ready = true;
+        document.title = player.getVideoData().title || "minitube";
+        player.playVideo();
+        ticker = setInterval(tick, 250);
+        wake();
+      },
+      onStateChange: (e) => {
+        if (current !== target) return;
+        if (e.data === YT.PlayerState.ENDED) {
+          savePosition(target.id, null);
+          current = null; // nothing to resume
+          showAsk();
+        } else if (e.data === YT.PlayerState.PAUSED) {
+          rememberPosition();
+          wake();
+        } else if (e.data === YT.PlayerState.PLAYING) {
+          document.title = player.getVideoData().title || "minitube";
+          wake();
+        }
+      },
+      onError: (e) => {
+        if (current !== target) return;
+        current = null;
+        showAsk(ERRORS[e.data] || "the player could not play this video");
+      },
+    },
+  });
+}
+
+function clock(seconds) {
+  seconds = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
+  const ss = String(s).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+let ticks = 0;
+function tick() {
+  if (!ready) return;
+  const t = player.getCurrentTime() || 0, d = player.getDuration() || 0;
+  fill.style.width = d ? Math.min(100, (t / d) * 100) + "%" : "0";
+  const rate = player.getPlaybackRate();
+  timeEl.textContent = d ? `${clock(t)} / ${clock(d)}${rate !== 1 ? ` · ${rate}×` : ""}` : "";
+  if (++ticks % 20 === 0 && isPlaying()) rememberPosition();
+}
+
+function isPlaying() {
+  return ready && player.getPlayerState() === YT.PlayerState.PLAYING;
+}
+
+function toggle() {
+  if (!ready) return;
+  if (isPlaying()) player.pauseVideo(); else player.playVideo();
+}
+
+function jump(delta) {
+  if (!ready) return;
+  const d = player.getDuration() || 0;
+  player.seekTo(Math.max(0, Math.min(d, player.getCurrentTime() + delta)), true);
+  tick();
+}
+
+function note(text) {
+  noteEl.textContent = text;
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => (noteEl.textContent = ""), 1200);
+  wake();
+}
+
+function changeVolume(delta) {
+  if (!ready) return;
+  // Turning up from mute brings back the old level instead of starting at 5.
+  const muted = player.isMuted();
+  const v = Math.max(0, Math.min(100, player.getVolume() + (muted ? 0 : delta)));
+  if (muted && delta > 0) player.unMute();
+  player.setVolume(v);
+  note(muted && delta < 0 ? "muted" : "volume " + v);
+}
+
+function toggleMute() {
+  if (!ready) return;
+  if (player.isMuted()) { player.unMute(); note("sound on"); } else { player.mute(); note("muted"); }
+}
+
+function changeSpeed(step) {
+  if (!ready) return;
+  const rates = player.getAvailablePlaybackRates();
+  const i = rates.indexOf(player.getPlaybackRate()) + step;
+  if (i < 0 || i >= rates.length) return;
+  player.setPlaybackRate(rates[i]);
+  note(rates[i] + "×");
+}
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen();
+}
+
+// Controls show on any movement and fade while the video plays.
+function wake() {
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    if (isPlaying()) document.body.classList.add("idle");
+  }, IDLE_MS);
+}
+
+// ---------- input ----------
+
+function submit(text) {
+  const target = parseLink(text);
+  if (!target) {
+    message.textContent = "that is not a youtube link";
+    return false;
+  }
+  play(target);
+  return true;
+}
+
+link.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submit(link.value);
+});
+
+link.addEventListener("input", () => (message.textContent = ""));
+
+// Paste anywhere, even over a playing video, to load that link.
+document.addEventListener("paste", (e) => {
+  const text = e.clipboardData.getData("text");
+  if (parseLink(text)) {
+    e.preventDefault();
+    submit(text);
+  }
+});
+
+let clickTimer = null;
+cover.addEventListener("click", () => {
+  clearTimeout(clickTimer);
+  clickTimer = setTimeout(toggle, 180); // leaves room for a double click
+});
+cover.addEventListener("dblclick", () => {
+  clearTimeout(clickTimer);
+  toggleFullscreen();
+});
+
+function seekFromPointer(e) {
+  if (!ready) return;
+  const box = seek.getBoundingClientRect();
+  const fraction = Math.max(0, Math.min(1, (e.clientX - box.left) / box.width));
+  player.seekTo(fraction * (player.getDuration() || 0), true);
+  fill.style.width = fraction * 100 + "%";
+}
+
+seek.addEventListener("pointerdown", (e) => {
+  seek.setPointerCapture(e.pointerId);
+  seekFromPointer(e);
+});
+seek.addEventListener("pointermove", (e) => {
+  if (seek.hasPointerCapture(e.pointerId)) seekFromPointer(e);
+});
+
+newButton.addEventListener("click", () => showAsk());
+document.addEventListener("mousemove", wake);
+window.addEventListener("pagehide", rememberPosition);
+
+document.addEventListener("keydown", (e) => {
+  if (stage.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+  const key = e.key;
+  let handled = true;
+  if (key === " " || key === "k") toggle();
+  else if (key === "ArrowLeft") jump(-5);
+  else if (key === "ArrowRight") jump(5);
+  else if (key === "j") jump(-10);
+  else if (key === "l") jump(10);
+  else if (key === "ArrowUp") changeVolume(5);
+  else if (key === "ArrowDown") changeVolume(-5);
+  else if (key === "m") toggleMute();
+  else if (key === "f") toggleFullscreen();
+  else if (key === ">") changeSpeed(1);
+  else if (key === "<") changeSpeed(-1);
+  else if (/^[0-9]$/.test(key) && ready) player.seekTo((Number(key) / 10) * (player.getDuration() || 0), true);
+  else if (key === "Escape" && !document.fullscreenElement) showAsk();
+  else handled = false;
+  if (handled) {
+    e.preventDefault();
+    wake();
+  }
+});
+
+const initial = linkFromAddress();
+if (initial) play(initial);
+</script>
+</body>
+</html>
