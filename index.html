@@ -220,7 +220,7 @@
     </div>
   </div>
 
-  <button id="new" hidden>new</button>
+  <button id="new" hidden>New</button>
 
 <script>
 const EMBED_HOST = "https://www.youtube-nocookie.com";
@@ -228,12 +228,12 @@ const IDLE_MS = 2200;
 const RESUME_KEY = "positions";
 const RESUME_MAX = 200;
 const ERRORS = {
-  2: "that link has a bad video id",
-  5: "the player could not play this video",
-  100: "video not found, or it is private",
-  101: "this one only plays on youtube itself, or does not exist",
-  150: "this one only plays on youtube itself, or does not exist",
-  153: "youtube refused the player (missing referrer)",
+  2: "That link has a bad video id",
+  5: "The player could not play this video",
+  100: "Video not found, or it is private",
+  101: "This one only plays on youtube itself, or does not exist",
+  150: "This one only plays on youtube itself, or does not exist",
+  153: "Youtube refused the player (missing referrer)",
 };
 
 const $ = (id) => document.getElementById(id);
@@ -399,7 +399,7 @@ async function play(target) {
   try {
     [ratio] = await Promise.all([aspectRatio(target.id), loadApi()]);
   } catch {
-    if (current === target) showAsk("could not reach youtube");
+    if (current === target) showAsk("Could not reach youtube");
     return;
   }
   if (current !== target) return; // another link was pasted meanwhile
@@ -461,7 +461,7 @@ async function play(target) {
       onError: (e) => {
         if (current !== target) return;
         current = null;
-        showAsk(ERRORS[e.data] || "the player could not play this video");
+        showAsk(ERRORS[e.data] || "The player could not play this video");
       },
     },
   });
@@ -514,12 +514,12 @@ function changeVolume(delta) {
   const v = Math.max(0, Math.min(100, player.getVolume() + (muted ? 0 : delta)));
   if (muted && delta > 0) player.unMute();
   player.setVolume(v);
-  note(muted && delta < 0 ? "muted" : "volume " + v);
+  note(muted && delta < 0 ? "Muted" : "Volume " + v);
 }
 
 function toggleMute() {
   if (!ready) return;
-  if (player.isMuted()) { player.unMute(); note("sound on"); } else { player.mute(); note("muted"); }
+  if (player.isMuted()) { player.unMute(); note("Sound on"); } else { player.mute(); note("Muted"); }
 }
 
 function changeSpeed(step) {
@@ -550,7 +550,7 @@ function wake() {
 function submit(text) {
   const target = parseLink(text);
   if (!target) {
-    message.textContent = "that is not a youtube link";
+    message.textContent = "That is not a youtube link";
     return false;
   }
   play(target);
