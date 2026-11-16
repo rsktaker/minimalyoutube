@@ -287,7 +287,7 @@ function parseLink(text) {
 }
 
 // The page address can carry the video: /?v=ID&t=90, or a whole YouTube link
-// after the slash (minimalyoutube.vercel.app/https://youtu.be/ID).
+// after the slash (minimalyoutube.com/https://youtu.be/ID).
 function linkFromAddress() {
   const params = new URLSearchParams(location.search);
   if (location.pathname === "/" || location.pathname === "/index.html") {
