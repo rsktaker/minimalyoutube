@@ -21,10 +21,15 @@ Watch, `youtu.be`, shorts, embed and live links all work. It remembers where you
 | `j` `l` | Back or forward 10 seconds |
 | ↑ ↓ | Volume |
 | `m` | Mute |
+| `c` | Captions on or off (remembered) |
+| `?`, or hover the top right corner | Help: every shortcut |
 | `f`, double click | Fullscreen |
-| `<` `>` | Speed |
+| `<` `>`, or click the speed under the video and pick one | Speed (remembered between videos) |
+| Hold the right margin | Skip ahead at 4×, then 8×, then 16× |
+| Hold the left margin | Go back at 4× |
+| Tap the right or left margin | Forward or back 10 seconds |
 | `0`–`9` | Jump to 0%–90% |
-| Esc | New link |
+| Esc | Close help, or new link |
 
 ## How it works
 

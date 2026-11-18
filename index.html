@@ -150,6 +150,63 @@
     color: var(--near);
   }
 
+  #speed {
+    padding: 0 0 0 12px;
+  }
+
+  #speed.fast {
+    color: var(--near);
+  }
+
+  /* The speed menu opens upward from the speed button. */
+  #speedBox {
+    position: relative;
+  }
+
+  #speedMenu {
+    position: absolute;
+    right: -10px;
+    bottom: calc(100% + 6px);
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+    border-radius: 6px;
+    background: var(--bg);
+    box-shadow: 0 0 0 1px var(--field), 0 6px 24px rgba(0, 0, 0, 0.12);
+  }
+
+  #speedMenu button {
+    padding: 1px 14px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #speedMenu button.on {
+    color: var(--near);
+  }
+
+  html:fullscreen #speedMenu {
+    background: rgba(20, 20, 20, 0.9);
+    box-shadow: none;
+  }
+
+  html:fullscreen #speedMenu button {
+    color: #8a8a8a;
+  }
+
+  html:fullscreen #speedMenu button.on,
+  html:fullscreen #speedMenu button:hover {
+    color: #e0e0e0;
+  }
+
+  /* The margins beside the video: hold to skip ahead. */
+  body.watching {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
   #new {
     position: fixed;
     right: 16px;
@@ -160,6 +217,66 @@
 
   #new:hover {
     opacity: 1;
+  }
+
+  /* With captions on, the player is three times wider instead of taller.
+     YouTube draws captions at the bottom of its player, which the tall crop
+     cuts off; the wide crop keeps the bottom and still hides the title text
+     at the far left and right. */
+  #frame.cc iframe {
+    left: -100%;
+    top: 0;
+    width: 300%;
+    height: 100%;
+  }
+
+  /* Help: hidden in the top right until hovered. */
+  #helpButton {
+    position: fixed;
+    right: 16px;
+    top: 12px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 2;
+  }
+
+  #helpButton:hover,
+  body.helping #helpButton {
+    opacity: 1;
+  }
+
+  #help {
+    position: fixed;
+    right: 16px;
+    top: 44px;
+    z-index: 2;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    padding: 14px 18px;
+    border-radius: 6px;
+    background: var(--bg);
+    box-shadow: 0 0 0 1px var(--field), 0 6px 24px rgba(0, 0, 0, 0.12);
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  #help table {
+    border-collapse: collapse;
+  }
+
+  #help td {
+    padding: 1px 0;
+    vertical-align: top;
+  }
+
+  #help td:first-child {
+    padding-right: 18px;
+    color: var(--near);
+    white-space: nowrap;
+  }
+
+  #help .gap td {
+    padding-top: 10px;
   }
 
   body.idle #controls {
@@ -198,7 +315,9 @@
     background: #e0e0e0;
   }
 
-  html:fullscreen #new {
+  html:fullscreen #new,
+  html:fullscreen #helpButton,
+  html:fullscreen #help {
     display: none;
   }
 </style>
@@ -216,11 +335,33 @@
     </div>
     <div id="controls">
       <div id="seek"><div id="track"><div id="fill"></div></div></div>
-      <div id="readout"><span id="time"></span><span id="note"></span></div>
+      <div id="readout"><span id="time"></span><span id="speedBox"><span id="note"></span><button id="speed" title="Speed">1×</button><div id="speedMenu" hidden></div></span></div>
     </div>
   </div>
 
   <button id="new" hidden>New</button>
+
+  <button id="helpButton">Help</button>
+  <div id="help" hidden>
+    <table>
+      <tr><td>Paste a link</td><td>Play it, even over a video that is playing</td></tr>
+      <tr><td>Click the video, space, k</td><td>Play or pause</td></tr>
+      <tr><td>Double click, f</td><td>Fullscreen</td></tr>
+      <tr><td>Click the line under it</td><td>Jump there (drag to scrub)</td></tr>
+      <tr class="gap"><td>Hold the right margin</td><td>Skip ahead at 4×, then 8×, then 16×</td></tr>
+      <tr><td>Hold the left margin</td><td>Go back at 4×</td></tr>
+      <tr><td>Tap a margin</td><td>Forward or back 10 seconds</td></tr>
+      <tr><td>Click the speed (bottom right), &lt; &gt;</td><td>Speed, up to 2× (remembered)</td></tr>
+      <tr class="gap"><td>← →</td><td>Back or forward 5 seconds</td></tr>
+      <tr><td>j l</td><td>Back or forward 10 seconds</td></tr>
+      <tr><td>0–9</td><td>Jump to 0%–90%</td></tr>
+      <tr><td>↑ ↓, m</td><td>Volume, mute</td></tr>
+      <tr><td>c</td><td>Captions on or off (remembered)</td></tr>
+      <tr><td>?</td><td>This help</td></tr>
+      <tr><td>Esc</td><td>Close this, or back to a new link</td></tr>
+      <tr class="gap"><td>Address</td><td>minimalyoutube.com/ then a youtube link, or ?v=ID&amp;t=90</td></tr>
+    </table>
+  </div>
 
 <script>
 const EMBED_HOST = "https://www.youtube-nocookie.com";
@@ -240,7 +381,15 @@ const $ = (id) => document.getElementById(id);
 const ask = $("ask"), link = $("link"), message = $("message");
 const stage = $("stage"), frame = $("frame"), cover = $("cover");
 const fill = $("fill"), seek = $("seek"), timeEl = $("time"), noteEl = $("note");
-const newButton = $("new");
+const newButton = $("new"), speedButton = $("speed");
+const helpButton = $("helpButton"), help = $("help");
+const SPEED_KEY = "speed";
+const CAPTIONS_KEY = "captions";
+const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
+// Holding a margin skips ahead faster the longer it is held: [after ms, speed].
+const SKIP_RAMP = [[0, 4], [1200, 8], [3000, 16]];
+const SKIP_TICK_MS = 200;
+const TAP_MS = 250;     // a quicker press is a tap: forward 10 seconds
 
 let player = null;      // YT.Player for the current video
 let current = null;     // { id, start }
@@ -364,6 +513,9 @@ async function aspectRatio(id) {
 }
 
 function closePlayer() {
+  if (skip) { clearTimeout(skip.timer); skip = null; }
+  document.body.classList.remove("watching");
+  speedMenu.hidden = true;
   clearInterval(ticker);
   ticker = null;
   if (player) {
@@ -408,6 +560,8 @@ async function play(target) {
   ask.hidden = true;
   stage.hidden = false;
   newButton.hidden = false;
+  document.body.classList.add("watching");
+  frame.classList.toggle("cc", captionsOn);
   fill.style.width = "0";
   timeEl.textContent = "";
 
@@ -440,6 +594,8 @@ async function play(target) {
         if (current !== target) return;
         ready = true;
         document.title = player.getVideoData().title || "minimalyoutube";
+        player.setPlaybackRate(savedSpeed());
+        applyCaptions(false);
         player.playVideo();
         ticker = setInterval(tick, 250);
         wake();
@@ -479,9 +635,15 @@ function tick() {
   if (!ready) return;
   const t = player.getCurrentTime() || 0, d = player.getDuration() || 0;
   fill.style.width = d ? Math.min(100, (t / d) * 100) + "%" : "0";
-  const rate = player.getPlaybackRate();
-  timeEl.textContent = d ? `${clock(t)} / ${clock(d)}${rate !== 1 ? ` · ${rate}×` : ""}` : "";
+  timeEl.textContent = d ? `${clock(t)} / ${clock(d)}` : "";
+  showSpeed();
   if (++ticks % 20 === 0 && isPlaying()) rememberPosition();
+}
+
+function showSpeed() {
+  const rate = skip ? skip.speed : player.getPlaybackRate();
+  speedButton.textContent = rate + "×";
+  speedButton.classList.toggle("fast", rate !== 1);
 }
 
 function isPlaying() {
@@ -522,14 +684,193 @@ function toggleMute() {
   if (player.isMuted()) { player.unMute(); note("Sound on"); } else { player.mute(); note("Muted"); }
 }
 
+function savedSpeed() {
+  try {
+    const rate = Number(localStorage.getItem(SPEED_KEY));
+    return rate > 0 && rate <= 2 ? rate : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function setSpeed(rate) {
+  if (!ready) return;
+  player.setPlaybackRate(rate);
+  try { localStorage.setItem(SPEED_KEY, String(rate)); } catch {}
+  showSpeed();
+  wake();
+}
+
 function changeSpeed(step) {
   if (!ready) return;
   const rates = player.getAvailablePlaybackRates();
   const i = rates.indexOf(player.getPlaybackRate()) + step;
   if (i < 0 || i >= rates.length) return;
-  player.setPlaybackRate(rates[i]);
-  note(rates[i] + "×");
+  setSpeed(rates[i]);
 }
+
+// The speed button opens a short menu of speeds to pick from.
+const speedMenu = $("speedMenu");
+for (const rate of SPEEDS.slice().reverse()) {
+  const b = document.createElement("button");
+  b.textContent = rate + "×";
+  b.dataset.rate = rate;
+  b.addEventListener("click", () => {
+    setSpeed(rate);
+    showSpeedMenu(false);
+  });
+  speedMenu.append(b);
+}
+
+function showSpeedMenu(open) {
+  if (open && !ready) return;
+  speedMenu.hidden = !open;
+  if (open) {
+    const rate = player.getPlaybackRate();
+    for (const b of speedMenu.children) b.classList.toggle("on", Number(b.dataset.rate) === rate);
+  }
+  wake();
+}
+
+speedButton.addEventListener("click", () => showSpeedMenu(speedMenu.hidden));
+
+// ---------- hold a margin to skip ----------
+
+// Right margin: skip ahead, faster the longer it is held. YouTube's player tops
+// out at 2×, so it plays at 2× and seeks forward in small steps for the rest.
+// Left margin: go back at a steady 4×, by seeking backward in small steps.
+// The video keeps playing throughout so the sound carries on.
+const REWIND_SPEED = 4;
+let skip = null; // { back, started, rate, speed, target, timer, skipping }
+
+function startSkip(e, back) {
+  if (!ready || skip) return;
+  document.body.setPointerCapture(e.pointerId);
+  const rate = player.getPlaybackRate();
+  skip = { back, started: Date.now(), rate, speed: rate, target: 0, timer: null, skipping: false };
+  skip.timer = setTimeout(function step() {
+    if (!skip) return;
+    const d = player.getDuration() || 0;
+    if (!skip.skipping) {
+      skip.skipping = true;
+      skip.target = player.getCurrentTime();
+      if (!back) player.setPlaybackRate(2);
+      if (!isPlaying()) player.playVideo();
+    }
+    if (back) {
+      // Counted from our own position, not the player's, which keeps playing
+      // forward between steps.
+      skip.speed = -REWIND_SPEED;
+      skip.target -= (REWIND_SPEED * SKIP_TICK_MS) / 1000;
+      if (skip.target <= 0) {
+        player.seekTo(0, true);
+        endSkip();
+        return;
+      }
+    } else {
+      const held = Date.now() - skip.started;
+      skip.speed = SKIP_RAMP.filter(([after]) => held >= after).pop()[1];
+      skip.target = Math.max(skip.target, player.getCurrentTime()) + ((skip.speed - 2) * SKIP_TICK_MS) / 1000;
+      // Stop short of the end, which would close the video.
+      if (d && skip.target > d - 2) {
+        player.seekTo(d - 2, true);
+        endSkip();
+        return;
+      }
+    }
+    player.seekTo(skip.target, true);
+    tick();
+    wake();
+    skip.timer = setTimeout(step, SKIP_TICK_MS);
+  }, TAP_MS);
+}
+
+function endSkip() {
+  if (!skip) return;
+  const s = skip;
+  skip = null;
+  clearTimeout(s.timer);
+  if (!ready) return;
+  if (s.skipping) player.setPlaybackRate(s.rate);
+  else jump(s.back ? -10 : 10);
+  tick();
+}
+
+function inMargin(e) {
+  return !stage.hidden && e.button === 0 && !stage.contains(e.target) && !e.target.closest("button, #help");
+}
+
+document.addEventListener("pointerdown", (e) => {
+  // A click outside the open speed menu or help only closes it.
+  if (!speedMenu.hidden && !e.target.closest("#speedBox")) {
+    showSpeedMenu(false);
+    return;
+  }
+  if (!help.hidden && !e.target.closest("#help, #helpButton")) {
+    showHelp(false);
+    return;
+  }
+  if (inMargin(e)) {
+    e.preventDefault();
+    const box = stage.getBoundingClientRect();
+    startSkip(e, e.clientX < box.left + box.width / 2);
+  }
+});
+document.addEventListener("pointerup", endSkip);
+document.addEventListener("pointercancel", endSkip);
+window.addEventListener("blur", endSkip);
+
+// ---------- captions ----------
+
+// YouTube draws the captions itself; this only switches them on and off and
+// picks a track (your language if the video has it, else its first track).
+let captionsOn = false;
+try { captionsOn = localStorage.getItem(CAPTIONS_KEY) === "on"; } catch {}
+
+function applyCaptions(announce) {
+  frame.classList.toggle("cc", captionsOn);
+  if (!ready) return;
+  if (!captionsOn) {
+    player.unloadModule("captions");
+    if (announce) note("Captions off");
+    return;
+  }
+  player.loadModule("captions");
+  const target = current;
+  let tries = 0;
+  (function pick() {
+    if (!ready || current !== target || !captionsOn) return;
+    const tracks = player.getOption("captions", "tracklist") || [];
+    if (!tracks.length) {
+      // The track list arrives a moment after the module loads.
+      if (++tries < 12) return setTimeout(pick, 250);
+      if (announce) note("This video has no captions");
+      return;
+    }
+    const lang = (navigator.language || "en").slice(0, 2);
+    const track = tracks.find((t) => t.languageCode.startsWith(lang) && t.kind !== "asr")
+      || tracks.find((t) => t.languageCode.startsWith(lang))
+      || tracks[0];
+    player.setOption("captions", "track", { languageCode: track.languageCode });
+    if (announce) note("Captions " + track.languageName);
+  })();
+}
+
+function toggleCaptions() {
+  if (!ready) return;
+  captionsOn = !captionsOn;
+  try { localStorage.setItem(CAPTIONS_KEY, captionsOn ? "on" : "off"); } catch {}
+  applyCaptions(true);
+}
+
+// ---------- help ----------
+
+function showHelp(open) {
+  help.hidden = !open;
+  document.body.classList.toggle("helping", open);
+}
+
+helpButton.addEventListener("click", () => showHelp(help.hidden));
 
 function toggleFullscreen() {
   if (document.fullscreenElement) document.exitFullscreen();
@@ -541,7 +882,7 @@ function wake() {
   document.body.classList.remove("idle");
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
-    if (isPlaying()) document.body.classList.add("idle");
+    if (isPlaying() && speedMenu.hidden) document.body.classList.add("idle");
   }, IDLE_MS);
 }
 
@@ -603,8 +944,24 @@ document.addEventListener("mousemove", wake);
 window.addEventListener("pagehide", rememberPosition);
 
 document.addEventListener("keydown", (e) => {
-  if (stage.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
   const key = e.key;
+  if (key === "Escape" && !speedMenu.hidden) {
+    showSpeedMenu(false);
+    e.preventDefault();
+    return;
+  }
+  if (key === "Escape" && !help.hidden) {
+    showHelp(false);
+    e.preventDefault();
+    return;
+  }
+  if (key === "?" && (stage.hidden ? e.target !== link || !link.value : true)) {
+    showHelp(help.hidden);
+    e.preventDefault();
+    return;
+  }
+  if (stage.hidden) return;
   let handled = true;
   if (key === " " || key === "k") toggle();
   else if (key === "ArrowLeft") jump(-5);
@@ -615,6 +972,7 @@ document.addEventListener("keydown", (e) => {
   else if (key === "ArrowDown") changeVolume(-5);
   else if (key === "m") toggleMute();
   else if (key === "f") toggleFullscreen();
+  else if (key === "c") toggleCaptions();
   else if (key === ">") changeSpeed(1);
   else if (key === "<") changeSpeed(-1);
   else if (/^[0-9]$/.test(key) && ready) player.seekTo((Number(key) / 10) * (player.getDuration() || 0), true);
